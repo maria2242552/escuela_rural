@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulación 3D interactiva — Conectividad rural</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#edf2ef;color:#193d3a}
+header{background:white;padding:16px 18px;border-bottom:4px solid #e5ad3f}h1{font-size:clamp(20px,4vw,29px);margin:0 0 6px}header p{margin:0;color:#536763;font-size:13px;line-height:1.4}
+main{max-width:1400px;margin:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:12px}
+#stage{position:relative;background:linear-gradient(#b8d9e8 0%,#e5eee8 68%,#9ab77c 100%);border-radius:14px;overflow:hidden;min-height:550px;height:calc(100vh - 135px);box-shadow:0 3px 16px #1d42301a;touch-action:none}
+canvas{width:100%;height:100%;display:block;cursor:grab}canvas:active{cursor:grabbing}
+.hint{position:absolute;bottom:12px;left:12px;background:#fffffff0;padding:8px 10px;border-radius:8px;font-size:12px;pointer-events:none}
+aside{display:flex;flex-direction:column;gap:10px}.card{background:white;border-radius:12px;padding:13px;box-shadow:0 2px 12px #1d423012}h2{font-size:15px;margin:0 0 10px}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px}.key{display:flex;align-items:center;gap:7px}.dot{width:11px;height:11px;border-radius:50%;flex:none}
+label{font-size:13px}.sliderlabel{display:flex;justify-content:space-between;font-weight:bold;margin:10px 0 5px}input[type=range]{width:100%;accent-color:#d9982c}
+.checks{display:grid;gap:8px;margin-top:10px}.checks label{display:flex;gap:7px;align-items:center}input[type=checkbox]{accent-color:#d9982c}
+button{border:0;border-radius:8px;background:#193d3a;color:white;padding:9px 11px;font-weight:bold;cursor:pointer}.buttons{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+#info{font-size:13px;line-height:1.5;color:#4c625d}#info strong{color:#193d3a}.note{font-size:11px;line-height:1.45;color:#6d7975;margin:8px 0 0}
+@media(max-width:850px){main{grid-template-columns:1fr}#stage{height:62vh;min-height:430px}aside{display:grid;grid-template-columns:1fr 1fr}aside .card:nth-child(3),aside .card:nth-child(4){grid-column:1/-1}}
+@media(max-width:520px){main{padding:8px}aside{display:flex}#stage{height:55vh;min-height:390px}}
+</style></head>
+<body>
+<header><h1>Conectividad e infraestructura tecnológica para una escuela rural</h1><p>Maqueta conceptual 3D interactiva · Satélite, antena receptora, torre, energía solar y equipos</p></header>
+<main>
+<section id="stage"><canvas id="scene"></canvas><div class="hint">☝ Arrastra con el dedo o mouse para girar · Pellizca o usa la rueda para acercar</div></section>
+<aside>
+<section class="card"><h2>Elementos de la propuesta</h2><div class="legend">
+<div class="key"><i class="dot" style="background:#ff7a24"></i>Satélite</div><div class="key"><i class="dot" style="background:#eee;border:1px solid #aaa"></i>Antena</div>
+<div class="key"><i class="dot" style="background:#397fbb"></i>Torre</div><div class="key"><i class="dot" style="background:#f0c64c"></i>Paneles solares</div>
+<div class="key"><i class="dot" style="background:#56a77b"></i>Escuela</div><div class="key"><i class="dot" style="background:#9a75c4"></i>Cobertura Wi-Fi</div>
+<div class="key"><i class="dot" style="background:#d68d55"></i>Computadores</div></div></section>
+<section class="card"><h2>Controles</h2><div class="sliderlabel"><span>Alcance Wi-Fi ilustrativo</span><span id="rangeVal">70 m</span></div><input id="range" type="range" min="30" max="120" value="70" step="5">
+<div class="checks"><label><input id="showSat" type="checkbox" checked> Mostrar enlace satelital</label><label><input id="showWifi" type="checkbox" checked> Mostrar cobertura Wi-Fi</label><label><input id="showSolar" type="checkbox" checked> Mostrar sistema solar</label><label><input id="showDevices" type="checkbox" checked> Mostrar computadores</label></div>
+<div class="buttons"><button id="reset">Restablecer vista</button><button id="auto">Giro automático: sí</button></div></section>
+<section class="card"><h2>Ficha del elemento</h2><div id="info"><strong>Escuela rural</strong><br>Centro de aprendizaje que recibe internet y donde se instalan el router, puntos de acceso y computadores. Toca o haz clic en los elementos de la escena para conocer su función.</div></section>
+<section class="card"><h2>¿Cómo viaja la conexión?</h2><div id="info">1. Satélite en órbita.<br>2. Antena parabólica recibe la señal.<br>3. Router y torre distribuyen la conexión.<br>4. Wi-Fi conecta aulas y equipos.</div><p class="note">Modelo conceptual, no es un plano técnico. Distancias y cobertura son ilustrativas; deben validarse con estudio del terreno, línea de vista, energía y pruebas de radiofrecuencia.</p></section>
+</aside></main>
+<script>
+(()=>{
+const canvas=document.getElementById('scene'),ctx=canvas.getContext('2d'),stage=document.getElementById('stage');
+let yaw=-.55,zoom=1,drag=false,lastX=0,lastY=0,pitch=.25,auto=true,selected=null;
+const $=id=>document.getElementById(id);
+const objects=[
+{name:'Escuela rural',desc:'Edificación principal donde se ubican el router, los puntos de acceso y los equipos para estudiantes y docentes.'},
+{name:'Antena satelital receptora',desc:'Antena parabólica exterior orientada al satélite del proveedor. Recibe internet y entrega la conexión al router de la escuela.'},
+{name:'Torre / repetidor inalámbrico',desc:'Estructura elevada para instalar antenas que distribuyen la señal hacia otros espacios o sedes cercanas. Requiere cálculo estructural, puesta a tierra y protección contra rayos.'},
+{name:'Sistema de energía solar',desc:'Paneles fotovoltaicos, controlador y baterías que suministran y almacenan energía para mantener activa la infraestructura TIC.'},
+{name:'Computadores de dotación',desc:'Equipos para que estudiantes y docentes accedan a plataformas, contenidos y herramientas educativas digitales.'},
+{name:'Satélite de comunicaciones',desc:'Representa el proveedor de internet en órbita. El equipo instalado en tierra es la antena receptora, no una torre satelital.'},
+{name:'Cobertura Wi-Fi',desc:'Zona ilustrativa donde se espera que llegue la señal inalámbrica. La cobertura real depende de obstáculos, potencia, antenas y diseño de red.'}
+];
+const state={sat:true,wifi:true,solar:true,devices:true,range:70};
+function resize(){let r=stage.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);draw()}
+function project(x,y,z){let c=Math.cos(yaw),s=Math.sin(yaw),X=x*c-z*s,Z=x*s+z*c;let cp=Math.cos(pitch),sp=Math.sin(pitch),Y=y*cp-Z*sp,Z2=y*sp+Z*cp;let f=500*zoom/(230+Z2);return [canvas.clientWidth/2+X*f,canvas.clientHeight*.62-Y*f,f]}
+function poly(points,color,stroke){let p=points.map(v=>project(...v));ctx.beginPath();p.forEach((v,i)=>i?ctx.lineTo(v[0],v[1]):ctx.moveTo(v[0],v[1]));ctx.closePath();ctx.fillStyle=color;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1.5;ctx.stroke()}}
+function line3(points,color,width=2,dash=[]){let p=points.map(v=>project(...v));ctx.beginPath();p.forEach((v,i)=>i?ctx.lineTo(v[0],v[1]):ctx.moveTo(v[0],v[1]));ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.stroke();ctx.setLineDash([])}
+function dot(x,y,z,r,color){let p=project(x,y,z);ctx.beginPath();ctx.arc(p[0],p[1],Math.max(2,r*p[2]),0,Math.PI*2);ctx.fillStyle=color;ctx.fill()}
+function text(t,x,y,z,color='#173b3a'){let p=project(x,y,z);ctx.font='bold 12px Arial';let w=ctx.measureText(t).width+14;ctx.fillStyle='#ffffffdf';ctx.beginPath();ctx.roundRect(p[0]-w/2,p[1]-22,w,20,5);ctx.fill();ctx.fillStyle=color;ctx.textAlign='center';ctx.fillText(t,p[0],p[1]-8)}
+function box3(x,y,z,w,h,d,color){poly([[x-w/2,y,z-d/2],[x+w/2,y,z-d/2],[x+w/2,y,z+d/2],[x-w/2,y,z+d/2]],shade(color,.82));poly([[x-w/2,y,z-d/2],[x+w/2,y,z-d/2],[x+w/2,y+h,z-d/2],[x-w/2,y+h,z-d/2]],shade(color,1.12));poly([[x+w/2,y,z-d/2],[x+w/2,y,z+d/2],[x+w/2,y+h,z+d/2],[x+w/2,y+h,z-d/2]],shade(color,.92))}
+function shade(hex,f){let n=parseInt(hex.slice(1),16),r=Math.min(255,((n>>16)&255)*f),g=Math.min(255,((n>>8)&255)*f),b=Math.min(255,(n&255)*f);return `rgb(${r},${g},${b})`}
+function draw(){
+let W=canvas.clientWidth,H=canvas.clientHeight;ctx.clearRect(0,0,W,H);
+// distant hills
+for(let i=0;i<6;i++){let x=i*W/5-30;ctx.fillStyle=i%2?'#8eae83':'#a1bb8a';ctx.beginPath();ctx.ellipse(x,H*.42,95,45,0,Math.PI,Math.PI*2);ctx.fill()}
+poly([[-180,0,-150],[180,0,-150],[180,0,150],[-180,0,150]],'#91b478');
+for(let i=-160;i<=160;i+=20)line3([[i,.1,-150],[i,.1,150]],'#779e67',.5);
+for(let z=-140;z<=150;z+=20)line3([[-180,.1,z],[180,.1,z]],'#779e67',.5);
+// wi-fi footprint
+if(state.wifi){let r=state.range;ctx.beginPath();for(let i=0;i<=64;i++){let a=i*Math.PI/32,p=project(Math.cos(a)*r,.35,Math.sin(a)*r);i?ctx.lineTo(...p):ctx.moveTo(...p)}ctx.closePath();ctx.fillStyle='#a986d333';ctx.fill();ctx.strokeStyle='#956ebc';ctx.setLineDash([5,4]);ctx.stroke();ctx.setLineDash([]);text('COBERTURA WI-FI',0,1,35,'#694a8c')}
+// school building
+box3(0,0,0,48,16,34,'#e9dfc8');poly([[-26,16,-19],[0,25,-19],[26,16,-19],[26,16,19],[0,25,19],[-26,16,19]],'#98594a');poly([[-26,16,-19],[0,25,-19],[26,16,-19],[0,16,0]],'#a85f4e');
+for(let x of [-16,-6,6,16]){box3(x,6,17.3,6,5,.5,'#397fbb')}
+box3(0,0,17.8,6,9,.6,'#79563e');text('ESCUELA RURAL',0,31,0);
+// dish
+line3([[-42,0,22],[-42,8,22]],'#666',4);let dp=project(-42,10,22);ctx.beginPath();ctx.arc(dp[0],dp[1],12*dp[2],Math.PI*1.05,Math.PI*1.95);ctx.strokeStyle='#f5f5ed';ctx.lineWidth=5;ctx.stroke();dot(-42,10,22,2,'#ff7a24');text('ANTENA SATELITAL',-42,19,22);
+// router
+box3(9,0,-5,5,7,5,'#397fbb');text('ROUTER',9,12,-5);
+// tower legs and cross braces
+let tx=52,tz=-38;for(let [x,z] of [[-3,-3],[3,-3],[-3,3],[3,3]])line3([[tx+x,0,tz+z],[tx+x*.55,55,tz+z*.55]],'#326e9f',3);
+for(let y=8;y<53;y+=8){line3([[tx-3,y,tz-3],[tx+3,y,tz+3]],'#326e9f',1.5);line3([[tx+3,y,tz-3],[tx-3,y,tz+3]],'#326e9f',1.5)}
+box3(tx,49,tz,3,7,2,'#f2f2ec');text('TORRE / REPETIDOR',tx,62,tz);
+// solar field
+if(state.solar){for(let i=0;i<3;i++){let x=-65+i*11;poly([[x-4,2,-38],[x+4,2,-38],[x+4,7,-49],[x-4,7,-49]],'#244c70','#b7d5e8');line3([[x,0,-43],[x,3,-43]],'#777',2)}box3(-54,0,-29,14,5,8,'#f0c64c');text('PANELES + BATERÍAS',-54,13,-42)}
+// computers
+if(state.devices){for(let i=0;i<5;i++){let x=-20+i*10;box3(x,1,48,4,2.5,3,'#d68d55');line3([[x-1.5,3.5,46.5],[x+1.5,3.5,46.5],[x+1.5,6,46.5],[x-1.5,6,46.5],[x-1.5,3.5,46.5]],'#397fbb',2)}text('DOTACIÓN DE EQUIPOS',0,14,54)}
+// satellite + link
+if(state.sat){box3(-100,104,-85,10,5,7,'#ff7a24');poly([[-117,104,-88],[-105,104,-88],[-105,104,-82],[-117,104,-82]],'#397fbb');poly([[-95,104,-88],[-83,104,-88],[-83,104,-82],[-95,104,-82]],'#397fbb');text('SATÉLITE EN ÓRBITA',-100,118,-85,'#b5531d');line3([[-100,101,-85],[-42,11,22]],'#ff7a24',2,[6,5]);}
+line3([[-42,8,22],[9,5,-5],[tx,45,tz]],'#ffb02e',2,[5,4]);
+// tree-like markers
+for(let i=0;i<17;i++){let x=Math.sin(i*8.3)*130,z=Math.cos(i*3.2)*105;if(Math.abs(x)<35&&Math.abs(z)<30)continue;dot(x,8,z,5,'#416e47');dot(x,13,z,3,'#547e4e')}
+if(selected){ctx.fillStyle='#173b3a';ctx.font='12px Arial';ctx.fillText('Elemento seleccionado: '+selected,14,22)}
+}
+function updateInfo(n){let o=objects.find(x=>x.name===n);if(o)$('info').innerHTML='<strong>'+o.name+'</strong><br>'+o.desc}
+function pick(x,y){let choices=[['Satélite de comunicaciones',-100,109,-85],['Escuela rural',0,13,0],['Antena satelital receptora',-42,10,22],['Torre / repetidor inalámbrico',52,48,-38],['Sistema de energía solar',-54,5,-40],['Computadores de dotación',0,4,48],['Cobertura Wi-Fi',0,1,35]];let best=null,bd=1e9;for(let [n,a,b,c] of choices){let p=project(a,b,c),d=Math.hypot(x-p[0],y-p[1]);if(d<bd){bd=d;best=n}}if(bd<85){selected=best;updateInfo(best);draw()}}
+canvas.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointermove',e=>{if(!drag)return;let dx=e.clientX-lastX,dy=e.clientY-lastY;yaw+=dx*.008;pitch=Math.max(-.25,Math.min(.8,pitch+dy*.004));lastX=e.clientX;lastY=e.clientY;draw()});
+canvas.addEventListener('pointerup',e=>{if(drag&&Math.abs(e.clientX-lastX)<3&&Math.abs(e.clientY-lastY)<3){let r=canvas.getBoundingClientRect();pick(e.clientX-r.left,e.clientY-r.top)}drag=false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.55,Math.min(1.8,zoom*(e.deltaY>0?.92:1.08)));draw()},{passive:false});
+let pinch=0;canvas.addEventListener('touchmove',e=>{if(e.touches.length===2){e.preventDefault();let d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(pinch)zoom=Math.max(.55,Math.min(1.8,zoom*d/pinch));pinch=d;draw()}},{passive:false});canvas.addEventListener('touchend',()=>pinch=0);
+$('range').oninput=e=>{state.range=+e.target.value;$('rangeVal').textContent=state.range+' m';draw()};
+[['showSat','sat'],['showWifi','wifi'],['showSolar','solar'],['showDevices','devices']].forEach(([id,k])=>$(id).onchange=e=>{state[k]=e.target.checked;draw()});
+$('reset').onclick=()=>{yaw=-.55;zoom=1;pitch=.25;selected=null;draw()};
+$('auto').onclick=()=>{auto=!auto;$('auto').textContent='Giro automático: '+(auto?'sí':'no')};
+function loop(){if(auto&&!drag){yaw+=.0018;draw()}requestAnimationFrame(loop)}
+window.addEventListener('resize',resize);resize();loop();
+})();
+</script></body></html>
